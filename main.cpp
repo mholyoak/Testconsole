@@ -1,8 +1,11 @@
 #include <QCoreApplication>
 #include <iostream>
 #include <memory> // shared_ptr
+#include <thread>
+#include <mutex>
 
 void TestCpp11 (void);
+void TestCpp11Threads (void);
 
 int main(int argc, char *argv[])
 {
@@ -11,6 +14,8 @@ int main(int argc, char *argv[])
     std::cout << "Hello World!" << std::endl;
 
     TestCpp11();
+
+    TestCpp11Threads();
 
     return 0; 
 }
@@ -81,5 +86,54 @@ void TestCpp11()
     std::for_each(testVector.begin(), testVector.end(), lambda);
 
     // same functionality without variable
-    std::for_each(testVector.begin(), testVector.end(), [](int n) {std::cout << "lambda n " << n << std::endl;});
+}
+
+class TestThreadClass
+{
+public:
+    int mClassCount;
+    int mThreadCount;
+    std::mutex mMutex;
+
+    TestThreadClass ()
+    {
+        mThreadCount = 0;
+        mClassCount = 0;
+    }
+
+    void RunThreadFunction ()
+    {
+        const int maxCount = 10000000;
+        mThreadCount++;
+        // Wait for second thread
+        while (mThreadCount != 2);
+
+        for(auto i = 1; i <= maxCount; i++)
+        {
+            {
+                // without this lock we get differences in values
+                std::lock_guard<std::mutex> lock(mMutex);
+
+                mClassCount = mClassCount + 1;
+                auto temp = mClassCount;
+                if (temp != mClassCount || i % (maxCount / 10) == 0)
+                {
+                    auto match = (temp == mClassCount) ? "match " : "Diff ";
+                    std::cout << match << std::this_thread::get_id() << " mClassCount: " << mClassCount <<
+                             " temp: " << temp << std::endl;
+                }
+            }
+        }
+    }
+};
+
+void TestCpp11Threads(void)
+{
+    TestThreadClass threadClass;
+
+    std::thread myThread(&TestThreadClass::RunThreadFunction, &threadClass);
+    std::thread my2Thread(&TestThreadClass::RunThreadFunction, &threadClass);
+
+    myThread.join();
+    my2Thread.join();
 }
